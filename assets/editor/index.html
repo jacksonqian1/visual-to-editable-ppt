@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visual to Editable PPT</title>
+  <link rel="stylesheet" href="/editor.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">
+      <span class="brand-mark">V</span>
+      <strong>Visual to Editable PPT</strong>
+      <span id="save-status" class="save-status">正在载入</span>
+    </div>
+    <div class="toolbar-group">
+      <button id="undo" class="icon-button" title="撤销" aria-label="撤销">↶</button>
+      <button id="redo" class="icon-button" title="重做" aria-label="重做">↷</button>
+      <span class="toolbar-divider"></span>
+      <button id="add-text" title="添加文本">T</button>
+      <button id="add-shape" title="添加矩形">□</button>
+      <button id="add-line" title="添加线条">╱</button>
+      <button id="add-icon" title="添加图标">◎</button>
+      <button id="upload-icon" title="上传图标" aria-label="上传图标">⇧</button>
+      <input id="upload-icon-input" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
+      <button id="library-auto" title="从图标库自动选择" aria-label="从图标库自动选择">⌕</button>
+      <button id="delete" class="danger" title="删除所选对象">⌫</button>
+    </div>
+    <div class="toolbar-group">
+      <label class="compact-control">
+        <span>原图</span>
+        <input id="overlay-visible" type="checkbox">
+      </label>
+      <label class="compact-control opacity-control">
+        <span>透明度</span>
+        <input id="overlay-opacity" type="range" min="0" max="1" step="0.05" value="0.25">
+      </label>
+      <label class="compact-control zoom-control">
+        <span>缩放</span>
+        <select id="zoom">
+          <option value="0.5">50%</option>
+          <option value="0.75">75%</option>
+          <option value="1" selected>100%</option>
+          <option value="1.25">125%</option>
+          <option value="1.5">150%</option>
+        </select>
+      </label>
+      <button id="confirm" class="primary">确认设计</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="layers-pane">
+      <div class="pane-heading">
+        <strong>图层</strong>
+        <span id="element-count">0</span>
+      </div>
+      <div id="layers" class="layers"></div>
+    </aside>
+
+    <section id="canvas-area" class="canvas-area">
+      <div id="canvas-shell" class="canvas-shell">
+        <div id="slide-canvas" class="slide-canvas"></div>
+      </div>
+    </section>
+
+    <aside class="inspector-pane">
+      <div class="pane-heading">
+        <strong>属性</strong>
+        <span id="selection-type">未选择</span>
+      </div>
+      <div id="inspector" class="inspector">
+        <p class="empty-state">选择画布或图层中的对象进行编辑。</p>
+      </div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/editor.js"></script>
+</body>
+</html>

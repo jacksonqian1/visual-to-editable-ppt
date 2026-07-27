@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "title": "Editable slide",
+  "status": "draft",
+  "canvas": {
+    "width": 1600,
+    "height": 900,
+    "background": "#ffffff"
+  },
+  "sourceImage": {
+    "src": "",
+    "opacity": 0.25,
+    "visible": false
+  },
+  "iconLibrary": {
+    "root": "",
+    "index": "./icon-library-index.json",
+    "policy": "library-only",
+    "autoSelect": true,
+    "threshold": 35
+  },
+  "layoutConstraints": [],
+  "elements": [
+    {
+      "id": "title",
+      "name": "Title",
+      "type": "text",
+      "x": 80,
+      "y": 60,
+      "width": 720,
+      "height": 80,
+      "rotation": 0,
+      "visible": true,
+      "locked": false,
+      "z": 10,
+      "text": "Double-click to edit",
+      "fontFamily": "PingFang SC",
+      "fontSize": 48,
+      "fontWeight": 700,
+      "color": "#c40000",
+      "align": "left",
+      "lineHeight": 1.2
+    },
+    {
+      "id": "example-line",
+      "name": "Example line",
+      "type": "line",
+      "x1": 80,
+      "y1": 180,
+      "x2": 720,
+      "y2": 180,
+      "stroke": "#df3030",
+      "strokeWidth": 2,
+      "dash": "solid",
+      "startArrow": "none",
+      "endArrow": "triangle",
+      "visible": true,
+      "locked": false,
+      "z": 5
+    }
+  ]
+}

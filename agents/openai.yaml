@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual to Editable PPT"
+  short_description: "在Codex中编辑图片还原页面并导出原生可编辑PPT"
+  default_prompt: "Use $visual-to-editable-ppt to reconstruct this visual in the Codex editor and export a confirmed editable PowerPoint."
