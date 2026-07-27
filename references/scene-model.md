@@ -19,6 +19,12 @@ Use UTF-8 JSON. The scene is the canonical project state.
     "opacity": 0.25,
     "visible": false
   },
+  "sharedIconStore": {
+    "enabled": true,
+    "root": "~/.codex/assets/visual-to-editable-ppt",
+    "icons": "~/.codex/assets/visual-to-editable-ppt/icons",
+    "index": "~/.codex/assets/visual-to-editable-ppt/icons/index.json"
+  },
   "layoutConstraints": [],
   "elements": []
 }
@@ -191,8 +197,11 @@ Library-selected assets may also include:
 }
 ```
 
-When `iconLibrary.policy` is `library-only`, unresolved semantic icons, arrows,
-and decorative lines must use placeholders instead of generated substitutes.
+When `iconLibrary.policy` is `semantic-first-with-generated-vector-fallback`,
+store the semantic request and selection provenance. Register generated assets
+in `sharedIconStore`, then copy the selected file into the project. When the
+policy is explicitly `library-only`, unresolved semantic icons, arrows, and
+decorative lines must use placeholders instead of generated substitutes.
 
 ## IDs And Ordering
 

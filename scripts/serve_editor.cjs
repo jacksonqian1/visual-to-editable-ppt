@@ -5,10 +5,16 @@ const path = require("node:path");
 const { URL } = require("node:url");
 const {
   loadIconLibrary,
+  loadIconLibraries,
   mimeFor,
   publicAsset,
   searchIconLibrary
 } = require("./icon_library.cjs");
+const {
+  DEFAULT_STORE_ROOT,
+  ensureSharedIconStore,
+  expandHome
+} = require("./shared_icon_store.cjs");
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -22,7 +28,7 @@ const editorRoot = path.resolve(__dirname, "../assets/editor");
 const projectRoot = path.dirname(projectPath);
 const iconLibraryOverride = arg("icon-library", "");
 let iconLibraryCache = null;
-let iconLibraryCacheRoot = "";
+let iconLibraryCacheKey = "";
 
 if (!projectPath || !fs.existsSync(projectPath)) {
   console.error("Usage: node serve_editor.cjs --project scene.json [--icon-library /path/to/icons] [--port 4173]");
@@ -98,18 +104,24 @@ async function saveProject(project) {
   await fs.promises.rename(tempPath, projectPath);
 }
 
-async function projectIconLibraryRoot() {
-  if (iconLibraryOverride) return path.resolve(iconLibraryOverride);
+async function projectIconLibraryRoots() {
   const project = JSON.parse(await fs.promises.readFile(projectPath, "utf8"));
-  return project.iconLibrary?.root ? path.resolve(project.iconLibrary.root) : "";
+  const roots = [];
+  if (iconLibraryOverride) roots.push(path.resolve(iconLibraryOverride));
+  else if (project.iconLibrary?.root) roots.push(expandHome(project.iconLibrary.root));
+  if (project.sharedIconStore?.enabled !== false) {
+    roots.push(expandHome(project.sharedIconStore?.icons || ensureSharedIconStore(DEFAULT_STORE_ROOT).icons));
+  }
+  return [...new Set(roots.filter(Boolean))];
 }
 
 async function getIconLibrary() {
-  const root = await projectIconLibraryRoot();
-  if (!root) return null;
-  if (!iconLibraryCache || iconLibraryCacheRoot !== root) {
-    iconLibraryCache = loadIconLibrary(root);
-    iconLibraryCacheRoot = root;
+  const roots = await projectIconLibraryRoots();
+  if (roots.length === 0) return null;
+  const key = roots.join("\u0000");
+  if (!iconLibraryCache || iconLibraryCacheKey !== key) {
+    iconLibraryCache = loadIconLibraries(roots);
+    iconLibraryCacheKey = key;
   }
   return iconLibraryCache;
 }
@@ -141,6 +153,7 @@ const server = http.createServer(async (request, response) => {
       return send(response, 200, JSON.stringify({
         configured: true,
         root: library.root,
+        roots: library.roots,
         count: library.count,
         query,
         kind,

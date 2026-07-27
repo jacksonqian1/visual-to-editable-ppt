@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 const fs = require("node:fs");
 const path = require("node:path");
-const { loadIconLibrary, mimeFor, publicAsset, searchIconLibrary } = require("./icon_library.cjs");
+const { loadIconLibraries, mimeFor, publicAsset, searchIconLibrary } = require("./icon_library.cjs");
+const {
+  DEFAULT_STORE_ROOT,
+  ensureSharedIconStore,
+  expandHome
+} = require("./shared_icon_store.cjs");
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -91,10 +96,15 @@ function main() {
   }
 
   const project = JSON.parse(fs.readFileSync(projectPath, "utf8"));
-  const libraryPath = explicitLibrary || project.iconLibrary?.root;
-  if (!libraryPath) throw new Error("No icon library configured");
-  const index = loadIconLibrary(libraryPath);
-  const threshold = Number(arg("threshold", project.iconLibrary?.threshold ?? 35));
+  const sharedStore = ensureSharedIconStore(project.sharedIconStore?.root || DEFAULT_STORE_ROOT);
+  const libraryPaths = [];
+  if (explicitLibrary) libraryPaths.push(path.resolve(explicitLibrary));
+  else if (project.iconLibrary?.root) libraryPaths.push(expandHome(project.iconLibrary.root));
+  if (project.sharedIconStore?.enabled !== false) {
+    libraryPaths.push(expandHome(project.sharedIconStore?.icons || sharedStore.icons));
+  }
+  const index = loadIconLibraries([...new Set(libraryPaths)]);
+  const threshold = Number(arg("threshold", project.iconLibrary?.threshold ?? 72));
   const report = [];
 
   for (const element of project.elements || []) {
@@ -125,6 +135,7 @@ function main() {
   fs.writeFileSync(reportPath, `${JSON.stringify({
     project: projectPath,
     library: index.root,
+    libraries: index.roots,
     threshold,
     total: report.length,
     accepted: report.filter((item) => item.accepted).length,

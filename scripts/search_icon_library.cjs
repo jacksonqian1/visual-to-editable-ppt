@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 const path = require("node:path");
 const { loadIconLibrary, publicAsset, searchIconLibrary } = require("./icon_library.cjs");
+const {
+  DEFAULT_STORE_ROOT,
+  ensureSharedIconStore
+} = require("./shared_icon_store.cjs");
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -9,14 +13,11 @@ function arg(name, fallback) {
 
 function main() {
   const libraryArg = arg("library", "");
-  const libraryPath = libraryArg ? path.resolve(libraryArg) : "";
+  const sharedStore = ensureSharedIconStore(arg("shared-root", DEFAULT_STORE_ROOT));
+  const libraryPath = libraryArg ? path.resolve(libraryArg) : sharedStore.icons;
   const query = arg("query", "");
   const kind = arg("kind", "");
   const limit = Number(arg("limit", "10"));
-  if (!libraryPath) {
-    console.error("Usage: node search_icon_library.cjs --library /path/to/icons --query \"target arrow\"");
-    process.exit(2);
-  }
   const index = loadIconLibrary(libraryPath);
   const matches = searchIconLibrary(index, query, { kind, limit }).map(publicAsset);
   console.log(JSON.stringify({ query, kind, count: matches.length, matches }, null, 2));

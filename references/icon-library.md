@@ -1,7 +1,8 @@
 # Local Icon Library
 
-Use a user-selected local directory as the only source for semantic icons,
-decorative lines, separators, and arrows.
+Use semantic meaning, object role, and page-level style to select icons,
+decorative lines, separators, and arrows. The shared icon store is the default
+source. A user-selected library may override or supplement it.
 
 ## Initialization
 
@@ -11,9 +12,11 @@ Bind the directory to a project:
 node scripts/configure_icon_library.cjs \
   --project /absolute/path/to/scene.json \
   --library /absolute/path/to/icon-library \
-  --policy library-only \
-  --threshold 35
+  --policy semantic-first-with-generated-vector-fallback \
+  --threshold 72
 ```
+
+Omit `--library` to bind the shared store.
 
 This writes `iconLibrary` into `scene.json` and creates a project-local
 `icon-library-index.json`. Existing `index.json` and `manifest.json` metadata are
@@ -65,8 +68,14 @@ visual to an image element.
 - Store the semantic request in `libraryQuery`.
 - When no candidate reaches the threshold, set `placeholder: true` and
   `libraryUnmatched: true`.
-- Under `library-only`, never invent, draw, generate, or download a replacement.
-  Leave the placeholder blank until the library is expanded or the user selects
-  a candidate.
+- Under `semantic-first-with-generated-vector-fallback`, reject candidates that
+  fail either the semantic or style threshold. Generate a consistent SVG or
+  transparent image only after retrieval fails.
+- Register accepted generated assets in the shared store with semantic aliases,
+  role, kind, style, provenance, and quality score.
+- Copy the selected asset into the project before export. Shared-store paths are
+  for retrieval and reuse, not a runtime dependency of the final project.
+- `library-only` remains available when the user explicitly prohibits
+  generation.
 - Native structural geometry is allowed only when it is not acting as a semantic
   icon, decorative line, separator, or arrow.

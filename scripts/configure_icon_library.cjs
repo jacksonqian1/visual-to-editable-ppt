@@ -2,6 +2,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { loadIconLibrary, publicAsset } = require("./icon_library.cjs");
+const {
+  DEFAULT_STORE_ROOT,
+  ensureSharedIconStore
+} = require("./shared_icon_store.cjs");
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -12,11 +16,12 @@ function main() {
   const projectArg = arg("project", "");
   const libraryArg = arg("library", "");
   const projectPath = projectArg ? path.resolve(projectArg) : "";
-  const libraryPath = libraryArg ? path.resolve(libraryArg) : "";
-  const policy = arg("policy", "library-only");
-  const threshold = Number(arg("threshold", "35"));
-  if (!projectPath || !libraryPath || !fs.existsSync(projectPath)) {
-    console.error("Usage: node configure_icon_library.cjs --project scene.json --library /path/to/icons");
+  const sharedStore = ensureSharedIconStore(arg("shared-root", DEFAULT_STORE_ROOT));
+  const libraryPath = libraryArg ? path.resolve(libraryArg) : sharedStore.icons;
+  const policy = arg("policy", "semantic-first-with-generated-vector-fallback");
+  const threshold = Number(arg("threshold", "72"));
+  if (!projectPath || !fs.existsSync(projectPath)) {
+    console.error("Usage: node configure_icon_library.cjs --project scene.json [--library /path/to/icons] [--shared-root /path/to/store]");
     process.exit(2);
   }
 
@@ -36,7 +41,13 @@ function main() {
     index: `./${path.basename(cachePath)}`,
     policy,
     autoSelect: true,
-    threshold: Number.isFinite(threshold) ? threshold : 35
+    threshold: Number.isFinite(threshold) ? threshold : 72
+  };
+  project.sharedIconStore = {
+    enabled: true,
+    root: sharedStore.root,
+    icons: sharedStore.icons,
+    index: sharedStore.index
   };
   project.status = "draft";
   fs.writeFileSync(projectPath, `${JSON.stringify(project, null, 2)}\n`, "utf8");
@@ -44,6 +55,7 @@ function main() {
     project: projectPath,
     library: index.root,
     assets: index.count,
+    sharedStore: sharedStore.root,
     policy,
     threshold: project.iconLibrary.threshold,
     cache: cachePath

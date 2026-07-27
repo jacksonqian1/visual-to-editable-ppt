@@ -94,9 +94,9 @@ function normalizeAsset(root, raw, metadata = {}) {
     name,
     tags: Array.isArray(merged.tags) ? merged.tags.map(String) : [],
     aliases: Array.isArray(merged.aliases) ? merged.aliases.map(String) : [],
-    style: merged.style || "",
-    source_type: merged.source_type || "",
-    harvest_status: merged.harvest_status || "",
+    style: merged.style || metadata.style || "",
+    source_type: merged.source_type || metadata.source_type || "",
+    harvest_status: merged.harvest_status || metadata.harvest_status || "",
     quality_score: Number.isFinite(Number(merged.quality_score)) ? Number(merged.quality_score) : null
   };
   asset.kind = merged.kind || inferKind(asset);
@@ -162,6 +162,35 @@ function loadIconLibrary(inputPath) {
   };
 }
 
+function loadIconLibraries(inputPaths) {
+  const roots = [...new Set((inputPaths || []).filter(Boolean).map((value) => path.resolve(value)))];
+  if (roots.length === 0) throw new Error("At least one icon library directory is required");
+  const libraries = roots.map(loadIconLibrary);
+  const combined = [];
+  const seen = new Set();
+  libraries.forEach((library, libraryIndex) => {
+    for (const asset of library.icons) {
+      const combinedId = roots.length === 1 ? asset.id : `${libraryIndex}:${asset.id}`;
+      if (seen.has(combinedId)) continue;
+      seen.add(combinedId);
+      combined.push({
+        ...asset,
+        id: combinedId,
+        library_root: library.root,
+        library_relative_path: asset.relative_path
+      });
+    }
+  });
+  return {
+    schema_version: 1,
+    root: roots[0],
+    roots,
+    count: combined.length,
+    default_style: libraries[0]?.default_style || "",
+    icons: combined
+  };
+}
+
 function searchIconLibrary(index, query, options = {}) {
   const expanded = expandQuery(query);
   const tokens = [...new Set(expanded.split(" ").filter(Boolean))];
@@ -203,6 +232,7 @@ function publicAsset(asset) {
     aliases: asset.aliases,
     style: asset.style,
     kind: asset.kind,
+    library_root: asset.library_root,
     quality_score: asset.quality_score,
     score: asset.score
   };
@@ -223,6 +253,7 @@ module.exports = {
   SUPPORTED_EXTENSIONS,
   isInside,
   loadIconLibrary,
+  loadIconLibraries,
   mimeFor,
   publicAsset,
   searchIconLibrary

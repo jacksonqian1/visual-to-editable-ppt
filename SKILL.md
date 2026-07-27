@@ -16,8 +16,9 @@ Do not treat arbitrary HTML or a screenshot as the canonical project state. Keep
 ## Required Workflow
 
 1. Resolve the exact source visual and inspect its dimensions.
-2. Resolve the user's local icon-library directory. Ask for it when the user has
-   not supplied one, then bind it with `scripts/configure_icon_library.cjs`.
+2. Initialize the shared icon store with `scripts/init_shared_icon_store.cjs`.
+   Its default root is `~/.codex/assets/visual-to-editable-ppt`. Bind a separate
+   user library only when the user supplies one explicitly.
 3. Create a project directory containing:
    - `scene.json`
    - the source image when available
@@ -32,8 +33,12 @@ Do not treat arbitrary HTML or a screenshot as the canonical project state. Keep
    `scripts/solve_layout_constraints.cjs` in report-only mode, then apply
    reviewed constraints. For overflow, expand the parent first, reduce spacing
    second, resize decorative objects third, and scale text/content last.
-7. Resolve semantic icons, decorative lines, separators, and arrows from the
-   configured library. Review the match report before applying it.
+7. Understand each icon's meaning and role before matching it. Search the
+   user-selected library, shared store, and built-in assets in that order.
+   Review semantic and style scores before applying a result. When no candidate
+   passes the threshold, create a consistent SVG or transparent image asset,
+   register it with `scripts/register_shared_icons.cjs`, and keep a project-local
+   copy.
 8. When lines cross or overlap, run `scripts/mark_scene_overlaps.cjs` and review
    the generated `overlapReport`. Keep crossing lines as separate editable
    objects unless the user explicitly requests a merged shape.
@@ -56,10 +61,11 @@ Read [references/scene-model.md](references/scene-model.md) before creating or e
 
 Copy `assets/project-template.json` into the project directory and replace its example elements. Use the source image's pixel dimensions for `canvas.width` and `canvas.height`.
 
-Read [references/icon-library.md](references/icon-library.md) before resolving
-icons. Default to `library-only`: do not generate or download icons when a local
-library is configured. If no match reaches the confidence threshold, leave a
-named placeholder and expose candidates in the editor.
+Read [references/shared-icon-store.md](references/shared-icon-store.md) and
+[references/icon-library.md](references/icon-library.md) before resolving
+icons. Default to `semantic-first-with-generated-vector-fallback`. Treat meaning
+and page-level style consistency as separate scores. Do not select a
+semantically weak icon merely because it resembles the source image.
 
 For image reconstruction:
 
@@ -70,6 +76,11 @@ For image reconstruction:
 - Use `image` only for complex visual assets that should remain raster or SVG.
 - Use library-selected `image` elements for semantic icons, decorative lines,
   separators, and arrows.
+- Treat arrows, arcs, chevrons, loops, and decorative connectors as reusable
+  visual assets. Do not approximate them with manually drawn PowerPoint lines
+  when a matching asset can be selected or generated.
+- Copy every selected shared asset into the project's `assets/icons/` directory
+  before final export so the scene is portable.
 - Give every element a stable `id` and readable `name`.
 - Mark uncertain icons or portraits with `placeholder: true`.
 - Represent repeated rows or columns and parent-child containment with
@@ -83,9 +94,11 @@ Load the workspace Node dependency path before starting when necessary.
 ```bash
 node scripts/serve_editor.cjs \
   --project /absolute/path/to/scene.json \
-  --icon-library /absolute/path/to/icon-library \
   --port 4173
 ```
+
+When `--icon-library` is omitted, the editor uses the project's configured
+library and then the shared icon store.
 
 Open `http://127.0.0.1:4173` in the Codex in-app browser. If the port is busy, choose another.
 
@@ -184,7 +197,9 @@ Use `scripts/inspect_pptx.py` for structural checks. Render the PPT using the av
 
 - [references/scene-model.md](references/scene-model.md): scene schema and element rules.
 - [references/icon-library.md](references/icon-library.md): initialization,
-  indexing, matching, and library-only behavior.
+  semantic matching, style scoring, and project-local copies.
+- [references/shared-icon-store.md](references/shared-icon-store.md): stable
+  shared storage, categories, registration, indexing, and generated-asset rules.
 - [references/boolean-geometry.md](references/boolean-geometry.md): editable
   union, intersection, subtraction, and tangent-region handling.
 - [references/layout-constraints.md](references/layout-constraints.md):
@@ -196,6 +211,10 @@ Use `scripts/inspect_pptx.py` for structural checks. Render the PPT using the av
 - `assets/project-template.json`: starter scene.
 - `scripts/serve_editor.cjs`: local editor and autosave service.
 - `scripts/configure_icon_library.cjs`: bind and index a user-selected library.
+- `scripts/init_shared_icon_store.cjs`: initialize the stable shared icon store.
+- `scripts/register_shared_icons.cjs`: register project icons and semantic
+  metadata in the shared store.
+- `scripts/shared_icon_store.cjs`: shared paths and index maintenance.
 - `scripts/search_icon_library.cjs`: query names, tags, aliases, and kinds.
 - `scripts/resolve_scene_icons.cjs`: report and apply automatic scene matches.
 - `scripts/mark_scene_overlaps.cjs`: detect and mark interior line crossings

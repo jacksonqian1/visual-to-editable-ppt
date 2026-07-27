@@ -15,9 +15,15 @@
   "iconLibrary": {
     "root": "",
     "index": "./icon-library-index.json",
-    "policy": "library-only",
+    "policy": "semantic-first-with-generated-vector-fallback",
     "autoSelect": true,
-    "threshold": 35
+    "threshold": 72
+  },
+  "sharedIconStore": {
+    "enabled": true,
+    "root": "~/.codex/assets/visual-to-editable-ppt",
+    "icons": "~/.codex/assets/visual-to-editable-ppt/icons",
+    "index": "~/.codex/assets/visual-to-editable-ppt/icons/index.json"
   },
   "layoutConstraints": [],
   "elements": [
