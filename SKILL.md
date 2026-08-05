@@ -25,26 +25,38 @@ Do not treat arbitrary HTML or a screenshot as the canonical project state. Keep
    - `icon-library-index.json`
    - `confirmed.html` after confirmation
    - the final `.pptx`
-4. Reconstruct the source as scene elements. Preserve every meaningful string as text.
+4. Reconstruct the source as scene elements. Preserve every meaningful string
+   as text. When reusing an icon from the screenshot itself, follow
+   [references/source-asset-extraction.md](references/source-asset-extraction.md)
+   and use `scripts/extract_source_visual_assets.py`; do not accept a manual
+   tight crop whose visible pixels enter the crop-edge risk band.
 5. Run `scripts/audit_scene_geometry.cjs` across the complete scene. Review
-   every out-of-bounds object, high-confidence edge-band candidate, and
-   round-rectangle fidelity risk before focusing on user-highlighted regions.
+   every out-of-bounds object, high-confidence edge-band candidate,
+   duplicate-border candidate, and round-rectangle fidelity risk before
+   focusing on user-highlighted regions.
 6. Infer parent-child relationships and repeated layout groups. Run
    `scripts/solve_layout_constraints.cjs` in report-only mode, then apply
    reviewed constraints. For overflow, expand the parent first, reduce spacing
    second, resize decorative objects third, and scale text/content last.
-7. Understand each icon's meaning and role before matching it. Search the
-   user-selected library, shared store, and built-in assets in that order.
-   Review semantic and style scores before applying a result. When no candidate
-   passes the threshold, create a consistent SVG or transparent image asset,
-   register it with `scripts/register_shared_icons.cjs`, and keep a project-local
-   copy.
+7. Classify every visual as a semantic icon, structural geometry, connector,
+   decoration, or brand asset. For semantic icons, infer meaning from nearby
+   text and the source visual, then search the user-selected library, shared
+   store, and built-in assets in that order. When no candidate passes both the
+   semantic and page-style thresholds, use the `imagegen` skill in built-in
+   mode to generate a consistent raster PNG. Do not hand-draw or generate an
+   SVG fallback. Run `scripts/normalize_semantic_icon.py` on every generated
+   PNG before scene placement. Reject and regenerate any icon whose visible
+   subject is already cut off at the source edge. Validate and copy the padded
+   PNG into the project before registering it with
+   `scripts/register_shared_icons.cjs`.
 8. When lines cross or overlap, run `scripts/mark_scene_overlaps.cjs` and review
    the generated `overlapReport`. Keep crossing lines as separate editable
    objects unless the user explicitly requests a merged shape.
 9. When a colored band touches the left, right, top, or bottom edge of a rounded
    panel, run `scripts/configure_panel_band_intersection.cjs`. Do not use a
    second rounded rectangle because its interior corners must remain square.
+   Keep exactly one visible owner for the panel outline; the script transfers
+   the panel stroke to the border overlay to prevent duplicate borders.
 10. Start the bundled local editor with `scripts/serve_editor.cjs`.
 11. Open the localhost editor in the Codex in-app browser. Keep the user in Codex.
 12. Let the user edit text, positions, sizes, icons, images, and line endpoints. The editor autosaves `scene.json`.
@@ -61,24 +73,28 @@ Read [references/scene-model.md](references/scene-model.md) before creating or e
 
 Copy `assets/project-template.json` into the project directory and replace its example elements. Use the source image's pixel dimensions for `canvas.width` and `canvas.height`.
 
-Read [references/shared-icon-store.md](references/shared-icon-store.md) and
-[references/icon-library.md](references/icon-library.md) before resolving
-icons. Default to `semantic-first-with-generated-vector-fallback`. Treat meaning
-and page-level style consistency as separate scores. Do not select a
-semantically weak icon merely because it resembles the source image.
+Read [references/shared-icon-store.md](references/shared-icon-store.md),
+[references/icon-library.md](references/icon-library.md), and
+[references/generated-semantic-icons.md](references/generated-semantic-icons.md)
+before resolving or generating icons. Default to
+`semantic-first-with-generated-raster-fallback`. Treat meaning and page-level
+style consistency as separate scores. Do not select a semantically weak icon
+merely because it resembles the source image.
 
 For image reconstruction:
 
 - Use one scene element per editable object when practical.
 - Use `text` for all audience-facing copy.
 - Use `rect`, `roundRect`, `ellipse`, and `line` for simple geometry.
-- Use `icon` for replaceable symbols.
-- Use `image` only for complex visual assets that should remain raster or SVG.
+- Use `icon` only for simple replaceable glyphs already present in the source.
+- Use `image` for generated semantic-icon PNGs and complex visual assets that
+  should remain raster or preserve an existing source SVG.
 - Use library-selected `image` elements for semantic icons, decorative lines,
   separators, and arrows.
-- Treat arrows, arcs, chevrons, loops, and decorative connectors as reusable
-  visual assets. Do not approximate them with manually drawn PowerPoint lines
-  when a matching asset can be selected or generated.
+- Keep borders, containers, masks, Boolean clipping shapes, and simple geometry
+  as native scene objects. Keep structural connectors that require exact
+  endpoints and direction as editable `line` elements. Use reusable assets for
+  decorative arrows, arcs, chevrons, and loops only when appropriate.
 - Copy every selected shared asset into the project's `assets/icons/` directory
   before final export so the scene is portable.
 - Give every element a stable `id` and readable `name`.
@@ -86,6 +102,56 @@ For image reconstruction:
 - Represent repeated rows or columns and parent-child containment with
   `layoutConstraints`. Read [references/layout-constraints.md](references/layout-constraints.md)
   before adjusting a local overflow or centering issue.
+
+## Extract Icons From The Source Visual
+
+Read [references/source-asset-extraction.md](references/source-asset-extraction.md)
+before extracting a screenshot icon. Use the adaptive extractor, which expands
+only the crop sides that still contain foreground pixels near an edge. A source
+icon is accepted only when the final alpha bounds clear the configured edge-risk
+band. If expansion reaches its limit, retrieve a library icon or regenerate it;
+adding transparent padding after pixels are missing is not a repair.
+
+`scene_to_html.cjs` rejects source-extracted image elements marked
+`mayBeClipped`, `edgeRisk`, or `recognitionRejected`. Do not bypass this check
+unless the user has visually approved that exact edge-touching asset and the
+element records `sourceAssetIntegrityApproved: true`.
+
+## Generate Semantic Icons
+
+Apply [references/generated-semantic-icons.md](references/generated-semantic-icons.md)
+only to unresolved semantic icons. Create one page-level style contract before
+generation and reuse it for every prompt. Generate one distinct icon per
+built-in `image_gen` call. For transparent icons, follow the `imagegen` skill's
+flat chroma-key workflow and validate alpha and edge cleanup before use.
+Normalize the alpha PNG onto a square transparent canvas with 10–14% safe-area
+padding on every side. Use the normalized file in `scene.json`; never reference
+the tight-cropped intermediate. The PPT exporter preserves `fit: contain` using
+the image's intrinsic aspect ratio, preserves `fit: cover` as an intentional
+crop, and fails when an image did not load, has an invalid layout box, uses an
+unsupported fit, or still depends on a remote URL.
+
+When two or more unresolved semantic icons are independent and subagents are
+available, the main agent may parallelize generation. Define the complete icon
+inventory, shared style contract, unique IDs, filenames, and isolated staging
+paths first. Each subagent must read the `imagegen` skill, generate and validate
+only its assigned files, and must not edit `scene.json` or register shared
+assets. The main agent performs final family-style QA, updates the scene once,
+and registers accepted assets once. Do not delegate a single icon or a tightly
+coupled iterative icon family.
+
+Do not use image generation for structural geometry, borders, masks, precise
+connectors, high-confidence library assets, official brand assets, or a
+user-requested `library-only` workflow.
+
+## Prevent Duplicate Borders
+
+Assign every visible boundary to exactly one stroke-owning object. Do not stack
+same-bounds shapes with the same visible stroke. For edge-aligned panel bands,
+keep the band and clipping mask borderless and let the single border overlay own
+the panel outline. Treat `transparent`, `none`, `hidden`, zero-width, and near-zero
+alpha strokes as no border. Review every `duplicateBorders` result from
+`audit_scene_geometry.cjs` before export.
 
 ## Run The Codex Editor
 
@@ -179,6 +245,7 @@ Read [references/qa.md](references/qa.md) before delivery.
 Always verify:
 
 - The editor view has no clipped text or objects outside the canvas.
+- No same-bounds objects unintentionally own the same visible border.
 - Every semantic child group stays inside its parent safe area.
 - Repeated columns and rows are centered, evenly distributed, and aligned to
   common baselines.
@@ -200,6 +267,10 @@ Use `scripts/inspect_pptx.py` for structural checks. Render the PPT using the av
   semantic matching, style scoring, and project-local copies.
 - [references/shared-icon-store.md](references/shared-icon-store.md): stable
   shared storage, categories, registration, indexing, and generated-asset rules.
+- [references/generated-semantic-icons.md](references/generated-semantic-icons.md):
+  imagegen prompting, chroma-key cleanup, subagent coordination, and icon QA.
+- [references/source-asset-extraction.md](references/source-asset-extraction.md):
+  adaptive screenshot-icon crops, edge-risk rejection, and HTML preflight.
 - [references/boolean-geometry.md](references/boolean-geometry.md): editable
   union, intersection, subtraction, and tangent-region handling.
 - [references/layout-constraints.md](references/layout-constraints.md):
@@ -214,9 +285,13 @@ Use `scripts/inspect_pptx.py` for structural checks. Render the PPT using the av
 - `scripts/init_shared_icon_store.cjs`: initialize the stable shared icon store.
 - `scripts/register_shared_icons.cjs`: register project icons and semantic
   metadata in the shared store.
+- `scripts/normalize_semantic_icon.py`: center generated PNG/WebP icons on a
+  padded transparent square canvas and report possible source-edge clipping.
 - `scripts/shared_icon_store.cjs`: shared paths and index maintenance.
 - `scripts/search_icon_library.cjs`: query names, tags, aliases, and kinds.
 - `scripts/resolve_scene_icons.cjs`: report and apply automatic scene matches.
+- `scripts/extract_source_visual_assets.py`: extract screenshot icons with
+  connected-background removal and adaptive edge expansion.
 - `scripts/mark_scene_overlaps.cjs`: detect and mark interior line crossings
   and collinear overlaps without merging the lines.
 - `scripts/configure_panel_band_intersection.cjs`: clip left, right, top, or

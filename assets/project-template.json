@@ -15,7 +15,7 @@
   "iconLibrary": {
     "root": "",
     "index": "./icon-library-index.json",
-    "policy": "semantic-first-with-generated-vector-fallback",
+    "policy": "semantic-first-with-generated-raster-fallback",
     "autoSelect": true,
     "threshold": 72
   },

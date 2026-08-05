@@ -78,6 +78,8 @@ node scripts/configure_panel_band_intersection.cjs \
 ```
 
 The script supports `left`, `right`, `top`, and `bottom`. It converts the band
-to a rectangle, intersects it with a duplicate of the rounded panel, and adds a
-transparent border overlay. The PowerPoint result is an editable freeform, not
-a raster mask.
+to a borderless rectangle, intersects it with a borderless duplicate of the
+rounded panel, transfers the panel's visible stroke to one border overlay, and
+clears the original panel stroke. This prevents duplicate outlines while
+keeping the PowerPoint result editable. Re-running the script is idempotent and
+preserves edits made to the existing overlay stroke.

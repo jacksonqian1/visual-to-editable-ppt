@@ -197,11 +197,14 @@ Library-selected assets may also include:
 }
 ```
 
-When `iconLibrary.policy` is `semantic-first-with-generated-vector-fallback`,
-store the semantic request and selection provenance. Register generated assets
-in `sharedIconStore`, then copy the selected file into the project. When the
-policy is explicitly `library-only`, unresolved semantic icons, arrows, and
-decorative lines must use placeholders instead of generated substitutes.
+When `iconLibrary.policy` is `semantic-first-with-generated-raster-fallback`,
+store the semantic request and selection provenance. Generate unresolved
+semantic icons as project-local PNG `image` elements using the `imagegen` skill;
+do not create an SVG fallback. Register validated generated assets in
+`sharedIconStore`, then keep the project-local file as the packaging source.
+Generated pixels remain movable, resizable, and replaceable but are not native
+PowerPoint vector geometry. When the policy is explicitly `library-only`,
+unresolved semantic icons must use placeholders instead of generated substitutes.
 
 ## IDs And Ordering
 

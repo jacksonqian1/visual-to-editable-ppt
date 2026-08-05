@@ -7,7 +7,8 @@ Map scene objects to native PowerPoint objects:
 - Text -> text boxes.
 - Shapes -> native shapes.
 - Lines -> native line shapes with endpoints.
-- Icons -> text or SVG/image objects.
+- Icons -> existing glyph/source SVG objects or generated raster PNG image
+  objects; unresolved semantic icons must not use a newly hand-drawn SVG fallback.
 - Images -> picture objects.
 
 Use this by default. It works offline and allows normal PowerPoint editing.

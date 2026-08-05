@@ -12,7 +12,7 @@ Bind the directory to a project:
 node scripts/configure_icon_library.cjs \
   --project /absolute/path/to/scene.json \
   --library /absolute/path/to/icon-library \
-  --policy semantic-first-with-generated-vector-fallback \
+  --policy semantic-first-with-generated-raster-fallback \
   --threshold 72
 ```
 
@@ -68,14 +68,18 @@ visual to an image element.
 - Store the semantic request in `libraryQuery`.
 - When no candidate reaches the threshold, set `placeholder: true` and
   `libraryUnmatched: true`.
-- Under `semantic-first-with-generated-vector-fallback`, reject candidates that
-  fail either the semantic or style threshold. Generate a consistent SVG or
-  transparent image only after retrieval fails.
+- Under `semantic-first-with-generated-raster-fallback`, reject candidates that
+  fail either the semantic or style threshold. For unresolved semantic icons,
+  use the `imagegen` skill to create a consistent PNG only after retrieval
+  fails. Do not hand-draw or generate an SVG fallback. Follow
+  `generated-semantic-icons.md` for prompting, transparency, subagents, and QA.
 - Register accepted generated assets in the shared store with semantic aliases,
   role, kind, style, provenance, and quality score.
 - Copy the selected asset into the project before export. Shared-store paths are
   for retrieval and reuse, not a runtime dependency of the final project.
 - `library-only` remains available when the user explicitly prohibits
   generation.
-- Native structural geometry is allowed only when it is not acting as a semantic
-  icon, decorative line, separator, or arrow.
+- Keep borders, masks, containers, simple geometry, and precise structural
+  connectors native and editable; they are not image-generation candidates.
+- Reuse exact user-provided or curated SVG assets when appropriate, but do not
+  create new SVG artwork as the generated fallback.
