@@ -136,6 +136,19 @@ function buildHtml(project, inputPath, outputPath) {
     if (ids.has(element.id)) throw new Error(`Duplicate element id: ${element.id}`);
     ids.add(element.id);
   }
+  const riskySourceImages = (project.elements || []).filter((element) => {
+    if (element.visible === false || element.type !== "image" || element.sourceAssetIntegrityApproved === true) {
+      return false;
+    }
+    return element.recognitionRejected === true
+      || element.sourceAsset?.metrics?.mayBeClipped === true
+      || Object.values(element.sourceAsset?.metrics?.edgeRisk || {}).some(Boolean);
+  });
+  if (riskySourceImages.length) {
+    throw new Error(
+      `Source-extracted images failed edge-integrity validation: ${riskySourceImages.map((element) => element.id).join(", ")}`
+    );
+  }
   const width = Number(project.canvas?.width);
   const height = Number(project.canvas?.height);
   if (!width || !height) throw new Error("canvas.width and canvas.height are required");

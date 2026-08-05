@@ -39,6 +39,20 @@ function main() {
   const group = `${panelId}-${edge}-band-clip`;
   const maskId = `${bandId}-rounded-mask`;
   const borderId = `${panelId}-border-overlay`;
+  const existingBorder = scene.elements.find((element) => element.id === borderId);
+  const visibleStroke = (element) => {
+    if (!element) return false;
+    const stroke = String(element.stroke || "").trim().toLowerCase();
+    return Number(element.strokeWidth) > 0
+      && !["", "none", "transparent"].includes(stroke);
+  };
+  const strokeOwner = visibleStroke(existingBorder)
+    ? existingBorder
+    : visibleStroke(panel)
+      ? panel
+      : null;
+  const panelStroke = strokeOwner?.stroke || "transparent";
+  const panelStrokeWidth = strokeOwner ? Number(strokeOwner.strokeWidth) || 0 : 0;
   scene.elements = scene.elements.filter((element) => ![maskId, borderId].includes(element.id));
 
   if (edge === "left" || edge === "right") {
@@ -52,10 +66,15 @@ function main() {
   }
 
   band.type = "rect";
-  band.name = `${band.name || band.id} (${edge} clipped band)`;
+  const bandBaseName = band.bandIntersectionOriginalName
+    || String(band.name || band.id).replace(/(?: \((?:left|right|top|bottom) clipped band\))+$/i, "");
+  band.bandIntersectionOriginalName = bandBaseName;
+  band.name = `${bandBaseName} (${edge} clipped band)`;
   band.mergeGroup = group;
   band.mergeOperation = "intersect";
   band.autoMerge = false;
+  band.stroke = "transparent";
+  band.strokeWidth = 0;
   delete band.radius;
   delete band.radiusTopLeft;
   delete band.radiusTopRight;
@@ -64,6 +83,8 @@ function main() {
 
   const bandZ = Number(band.z) || Number(panel.z) + 1;
   panel.forceCustomGeometry = true;
+  panel.stroke = "transparent";
+  panel.strokeWidth = 0;
   scene.elements.push({
     id: maskId,
     name: `${panel.name || panel.id} rounded clipping mask`,
@@ -88,36 +109,45 @@ function main() {
     mergeOperation: "intersect",
     autoMerge: false
   });
-  scene.elements.push({
-    id: borderId,
-    name: `${panel.name || panel.id} top border overlay`,
-    type: "roundRect",
-    visible: true,
-    locked: false,
-    z: bandZ + 0.02,
-    x: panel.x,
-    y: panel.y,
-    width: panel.width,
-    height: panel.height,
-    rotation: Number(panel.rotation) || 0,
-    fill: "transparent",
-    stroke: panel.stroke || "transparent",
-    strokeWidth: Number(panel.strokeWidth) || 0,
-    radiusTopLeft: panel.radiusTopLeft,
-    radiusTopRight: panel.radiusTopRight,
-    radiusBottomRight: panel.radiusBottomRight,
-    radiusBottomLeft: panel.radiusBottomLeft,
-    forceCustomGeometry: true,
-    overlapGroup: group,
-    overlapKind: "overlap",
-    overlapRole: "foreground"
-  });
+  if (panelStrokeWidth > 0) {
+    scene.elements.push({
+      id: borderId,
+      name: `${panel.name || panel.id} ${edge} border overlay`,
+      type: "roundRect",
+      visible: true,
+      locked: false,
+      z: bandZ + 0.02,
+      x: panel.x,
+      y: panel.y,
+      width: panel.width,
+      height: panel.height,
+      rotation: Number(panel.rotation) || 0,
+      fill: "transparent",
+      stroke: panelStroke,
+      strokeWidth: panelStrokeWidth,
+      radiusTopLeft: panel.radiusTopLeft,
+      radiusTopRight: panel.radiusTopRight,
+      radiusBottomRight: panel.radiusBottomRight,
+      radiusBottomLeft: panel.radiusBottomLeft,
+      forceCustomGeometry: true,
+      overlapGroup: group,
+      overlapKind: "overlap",
+      overlapRole: "foreground"
+    });
+  }
 
   scene.metadata = scene.metadata || {};
   const configurations = Array.isArray(scene.metadata.panelBandIntersections)
     ? scene.metadata.panelBandIntersections.filter((item) => item.bandId !== bandId)
     : [];
-  configurations.push({ panelId, bandId, edge, group, maskId, borderId });
+  configurations.push({
+    panelId,
+    bandId,
+    edge,
+    group,
+    maskId,
+    borderId: panelStrokeWidth > 0 ? borderId : null
+  });
   scene.metadata.panelBandIntersections = configurations;
 
   fs.mkdirSync(path.dirname(output), { recursive: true });

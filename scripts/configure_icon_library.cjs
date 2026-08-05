@@ -18,7 +18,7 @@ function main() {
   const projectPath = projectArg ? path.resolve(projectArg) : "";
   const sharedStore = ensureSharedIconStore(arg("shared-root", DEFAULT_STORE_ROOT));
   const libraryPath = libraryArg ? path.resolve(libraryArg) : sharedStore.icons;
-  const policy = arg("policy", "semantic-first-with-generated-vector-fallback");
+  const policy = arg("policy", "semantic-first-with-generated-raster-fallback");
   const threshold = Number(arg("threshold", "72"));
   if (!projectPath || !fs.existsSync(projectPath)) {
     console.error("Usage: node configure_icon_library.cjs --project scene.json [--library /path/to/icons] [--shared-root /path/to/store]");

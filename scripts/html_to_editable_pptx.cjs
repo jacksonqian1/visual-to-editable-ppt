@@ -41,6 +41,20 @@ function styleKey(node) {
   ].join("|");
 }
 
+function hasVisibleBorder(node) {
+  return Boolean(
+    node.borderColor
+    && Number(node.borderWidth) > 0
+    && !["none", "hidden"].includes(String(node.borderStyle || "").toLowerCase())
+  );
+}
+
+function shapeLine(node) {
+  return hasVisibleBorder(node)
+    ? { color: node.borderColor, width: Math.max(0.25, node.borderWidth * 0.5) }
+    : { color: "FFFFFF", transparency: 100 };
+}
+
 function customNode(members, operation, tolerance, source) {
   const geometry = booleanRectangles(members, operation, tolerance);
   if (!geometry.bounds || !geometry.loops.length) return null;
@@ -220,7 +234,8 @@ async function main() {
     const clean = (value) => Number.parseFloat(value) || 0;
     const color = (value) => {
       const match = String(value || "").match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-      if (!match || match[4] === "0") return null;
+      const alpha = match?.[4] == null ? 1 : Number(match[4]);
+      if (!match || !Number.isFinite(alpha) || alpha <= 0.01) return null;
       return [match[1], match[2], match[3]]
         .map((number) => Number(number).toString(16).padStart(2, "0"))
         .join("")
@@ -245,6 +260,8 @@ async function main() {
         overlapRole: element.dataset.overlapRole || "",
         text: element.innerText || element.textContent || "",
         src: element.currentSrc || element.src || null,
+        naturalWidth: element instanceof HTMLImageElement ? element.naturalWidth : 0,
+        naturalHeight: element instanceof HTMLImageElement ? element.naturalHeight : 0,
         rotation,
         x: rotation ? element.offsetLeft : rect.left - slideRect.left,
         y: rotation ? element.offsetTop : rect.top - slideRect.top,
@@ -293,6 +310,27 @@ async function main() {
   pptx.theme = { headFontFace: "PingFang SC", bodyFontFace: "PingFang SC", lang: "zh-CN" };
   const slide = pptx.addSlide();
   slide.background = { color: model.background };
+  const unloadedImages = model.nodes.filter((node) => node.kind === "image" && (!(node.naturalWidth > 0) || !(node.naturalHeight > 0)));
+  if (unloadedImages.length) {
+    throw new Error(`Cannot export unloaded image assets: ${unloadedImages.map((node) => node.id).join(", ")}`);
+  }
+  const remoteImages = model.nodes.filter((node) => node.kind === "image" && /^https?:/i.test(node.src || ""));
+  if (remoteImages.length) {
+    throw new Error(`Remote image assets must be copied into the project before export: ${remoteImages.map((node) => node.id).join(", ")}`);
+  }
+  const invalidImageLayouts = model.nodes.filter((node) => {
+    if (node.kind !== "image") return false;
+    const values = [node.x, node.y, node.w, node.h];
+    if (!values.every(Number.isFinite) || node.w < 0.5 || node.h < 0.5) return true;
+    return node.x + node.w <= 0 || node.y + node.h <= 0 || node.x >= model.width || node.y >= model.height;
+  });
+  if (invalidImageLayouts.length) {
+    throw new Error(`Image assets have empty or off-slide layout boxes: ${invalidImageLayouts.map((node) => node.id).join(", ")}`);
+  }
+  const unsupportedImageFits = model.nodes.filter((node) => node.kind === "image" && !["contain", "cover", "fill"].includes(node.fit));
+  if (unsupportedImageFits.length) {
+    throw new Error(`Unsupported image object-fit values: ${unsupportedImageFits.map((node) => `${node.id}=${node.fit}`).join(", ")}`);
+  }
   const X = (value) => value * widthIn / model.width;
   const Y = (value) => value * heightIn / model.height;
   const booleanPlan = prepareBooleanPlan(model.nodes, mergeMode, mergeTolerance);
@@ -302,6 +340,35 @@ async function main() {
     return {
       objectName: marker ? `[${marker}] ${node.name}` : node.name,
       ...(marker ? { altText: `PPT overlap marker: ${marker}; source object: ${node.name}` } : {})
+    };
+  };
+  const containImagePosition = (node, position) => {
+    const scale = Math.min(position.w / node.naturalWidth, position.h / node.naturalHeight);
+    const width = node.naturalWidth * scale;
+    const height = node.naturalHeight * scale;
+    return {
+      x: position.x + (position.w - width) / 2,
+      y: position.y + (position.h - height) / 2,
+      w: width,
+      h: height
+    };
+  };
+  const coverImagePosition = (node, position) => {
+    const scale = Math.max(position.w / node.naturalWidth, position.h / node.naturalHeight);
+    const virtualWidth = node.naturalWidth * scale;
+    const virtualHeight = node.naturalHeight * scale;
+    return {
+      x: position.x,
+      y: position.y,
+      w: virtualWidth,
+      h: virtualHeight,
+      sizing: {
+        type: "crop",
+        x: (virtualWidth - position.w) / 2,
+        y: (virtualHeight - position.h) / 2,
+        w: position.w,
+        h: position.h
+      }
     };
   };
 
@@ -324,9 +391,7 @@ async function main() {
         points,
         ...metadata(node),
         fill: node.fill ? { color: node.fill } : { color: "FFFFFF", transparency: 100 },
-        line: node.borderColor && node.borderWidth
-          ? { color: node.borderColor, width: Math.max(0.25, node.borderWidth * 0.5) }
-          : { color: "FFFFFF", transparency: 100 }
+        line: shapeLine(node)
       });
       continue;
     }
@@ -353,7 +418,17 @@ async function main() {
       const image = node.src.startsWith("data:")
         ? { data: node.src }
         : { path: decodeURIComponent(new URL(node.src).pathname) };
-      slide.addImage({ ...image, ...position, ...metadata(node), rotate: node.rotation || 0 });
+      if (node.fit === "cover") {
+        slide.addImage({
+          ...image,
+          ...coverImagePosition(node, position),
+          ...metadata(node),
+          rotate: node.rotation || 0
+        });
+      } else {
+        const imagePosition = node.fit === "contain" ? containImagePosition(node, position) : position;
+        slide.addImage({ ...image, ...imagePosition, ...metadata(node), rotate: node.rotation || 0 });
+      }
       continue;
     }
     if (node.kind !== "shape") continue;
@@ -402,9 +477,7 @@ async function main() {
         ...metadata(node),
         rotate: node.rotation || 0,
         fill: node.fill ? { color: node.fill } : { color: "FFFFFF", transparency: 100 },
-        line: node.borderColor && node.borderWidth
-          ? { color: node.borderColor, width: Math.max(0.25, node.borderWidth * 0.5) }
-          : { color: "FFFFFF", transparency: 100 }
+        line: shapeLine(node)
       });
       continue;
     }
@@ -421,9 +494,7 @@ async function main() {
       ...metadata(node),
       rotate: node.rotation || 0,
       fill: node.fill ? { color: node.fill } : { color: "FFFFFF", transparency: 100 },
-      line: node.borderColor && node.borderWidth
-        ? { color: node.borderColor, width: Math.max(0.25, node.borderWidth * 0.5) }
-        : { color: "FFFFFF", transparency: 100 }
+      line: shapeLine(node)
     });
   }
 

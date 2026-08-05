@@ -45,7 +45,8 @@ node scripts/register_shared_icons.cjs \
   --collection agent-operations \
   --report /project/semantic-icon-report.json \
   --style "green monochrome outline" \
-  --source-type semantic-vector-generated
+  --source-type semantic-raster-generated \
+  --generator imagegen-built-in
 ```
 
 When a report is supplied, register only icons referenced by the scene. Use
@@ -55,7 +56,7 @@ Registration:
 
 - copies the source asset instead of moving it;
 - aggregates semantic aliases from every scene use;
-- records style, role, kind, provenance, and quality;
+- records style, role, kind, format, generator, provenance, and quality;
 - rebuilds `icons/index.json`;
 - updates the shared-store count and timestamp.
 
@@ -64,11 +65,12 @@ Registration:
 1. User-selected local library, when explicitly configured.
 2. Shared store.
 3. Skill-provided built-in seed icons.
-4. Generated SVG or transparent image fallback.
+4. Generated raster PNG fallback for unresolved semantic icons.
 
 Score semantic meaning and page-level style separately. A high visual similarity
 must not override a semantic mismatch. A semantic match with a severe style
-mismatch should trigger a generated or adapted asset.
+mismatch should trigger a generated raster asset. Register format and raster or
+vector provenance accurately; never tag a PNG as vector.
 
 ## Project Portability
 

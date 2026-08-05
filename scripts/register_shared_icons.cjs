@@ -48,16 +48,24 @@ function semanticMap(reportPath) {
   if (!reportPath) return new Map();
   const report = readJson(reportPath, {});
   const map = new Map();
-  for (const decision of report.decisions || []) {
-    const key = kebab(decision.selected);
+  const items = report.decisions || report.matches || [];
+  for (const decision of items) {
+    const selected = decision.selected
+      || decision.output
+      || decision.best?.relative_path
+      || decision.best?.name
+      || decision.id;
+    const key = kebab(selected);
     const current = map.get(key) || {
       semantics: new Set(),
       roles: new Set(),
       scores: []
     };
-    if (decision.semantic) current.semantics.add(String(decision.semantic));
+    const semantic = decision.semantic || decision.query;
+    if (semantic) current.semantics.add(String(semantic));
     if (decision.role) current.roles.add(String(decision.role));
-    if (Number.isFinite(Number(decision.score))) current.scores.push(Number(decision.score));
+    const score = decision.score ?? decision.best?.score;
+    if (Number.isFinite(Number(score))) current.scores.push(Number(score));
     map.set(key, current);
   }
   return map;
@@ -91,7 +99,8 @@ function main() {
   const reportArg = arg("report", "");
   const report = reportArg ? path.resolve(reportArg) : "";
   const style = arg("style", "green monochrome outline");
-  const sourceType = arg("source-type", "semantic-vector-generated");
+  const sourceType = arg("source-type", "");
+  const generator = arg("generator", "");
   const includeUnreferenced = hasFlag("include-unreferenced");
   if (!source || !fs.existsSync(source) || !ICON_CATEGORIES.includes(category)) {
     console.error("Usage: node register_shared_icons.cjs --source /path/to/icons --category generated --collection name [--report semantic-icon-report.json]");
@@ -129,19 +138,26 @@ function main() {
     const quality = match.scores.length
       ? Math.min(1, Math.max(...match.scores) / 100)
       : 0.9;
+    const format = path.extname(sourceFile).slice(1).toLowerCase();
+    const formatClass = format === "svg" ? "vector" : "raster";
     const metadata = {
       name: stem.replaceAll("-", " "),
       tags: [
         category,
         collection,
-        "vector",
+        formatClass,
+        format,
         ...roles,
         ...aliases
       ],
       aliases,
       style,
       kind: inferKind(stem, match.roles),
-      source_type: sourceType,
+      source_type: sourceType || (formatClass === "vector"
+        ? "semantic-vector-curated"
+        : "semantic-raster-generated"),
+      asset_format: format,
+      ...(generator ? { generator } : {}),
       harvest_status: "registered",
       quality_score: quality,
       collection,

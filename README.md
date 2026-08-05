@@ -13,12 +13,19 @@ source visual -> scene.json -> Codex editor -> confirmed HTML -> editable PPTX
 
 - Reconstructs text, shapes, icons, images, and connector lines as editable objects.
 - Opens a local visual editor inside Codex for review and adjustment.
-- Uses a configurable local icon library for icons, lines, and arrows.
+- Resolves semantic icons from user, shared, and built-in libraries before
+  falling back to consistently styled raster generation.
+- Normalizes generated icons onto padded transparent canvases and blocks
+  edge-clipped assets before HTML generation.
+- Adaptively expands screenshot-icon crops until their complete foreground
+  clears the crop-edge risk band.
 - Supports independent corner radii and editable Boolean shape intersections.
 - Detects crossing and overlapping lines without flattening them.
 - Audits full-slide bounds and rounded-rectangle fidelity.
 - Solves repeated-column alignment and parent-child containment constraints.
 - Exports confirmed HTML scenes as native editable PowerPoint objects.
+- Preserves `contain` and `cover` image behavior without stretching or silently
+  omitting unloaded assets.
 - Verifies that the result is not a single full-slide image.
 
 ## Install

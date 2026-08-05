@@ -42,6 +42,26 @@ function contains(outer, inner, tolerance) {
     && inner.y + inner.h <= outer.y + outer.h + tolerance;
 }
 
+function normalizedStroke(element) {
+  return String(element.stroke || "").trim().toLowerCase();
+}
+
+function hasVisibleStroke(element) {
+  const stroke = normalizedStroke(element);
+  return Number(element.strokeWidth) > 0
+    && !["", "none", "transparent"].includes(stroke)
+    && !/^rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/i.test(stroke);
+}
+
+function sameBounds(left, right, tolerance) {
+  const a = bounds(left);
+  const b = bounds(right);
+  return near(a.x, b.x, tolerance)
+    && near(a.y, b.y, tolerance)
+    && near(a.w, b.w, tolerance)
+    && near(a.h, b.h, tolerance);
+}
+
 function main() {
   const args = parseArgs(process.argv);
   const input = path.resolve(args.input || "");
@@ -112,16 +132,42 @@ function main() {
       ].map((value) => Number(value) || 0)
     }));
 
+  const strokedShapes = visible.filter((element) =>
+    ["rect", "roundRect", "ellipse"].includes(element.type)
+    && hasVisibleStroke(element)
+    && !String(element.id || "").includes("mask")
+  );
+  const duplicateBorders = [];
+  for (let leftIndex = 0; leftIndex < strokedShapes.length; leftIndex += 1) {
+    const left = strokedShapes[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < strokedShapes.length; rightIndex += 1) {
+      const right = strokedShapes[rightIndex];
+      if (!sameBounds(left, right, tolerance)) continue;
+      if (normalizedStroke(left) !== normalizedStroke(right)) continue;
+      if (!near(left.strokeWidth, right.strokeWidth, tolerance)) continue;
+      duplicateBorders.push({
+        firstId: left.id,
+        secondId: right.id,
+        stroke: left.stroke,
+        strokeWidth: Number(left.strokeWidth),
+        confidence: "high",
+        reason: "Same-bounds shapes own the same visible stroke"
+      });
+    }
+  }
+
   const report = {
     file: input,
     canvas,
     visibleElements: visible.length,
     outOfBounds,
     edgeBands,
+    duplicateBorders,
     exactRoundRectCandidates,
     summary: {
       outOfBounds: outOfBounds.length,
       edgeBands: edgeBands.length,
+      duplicateBorders: duplicateBorders.length,
       exactRoundRectCandidates: exactRoundRectCandidates.length
     }
   };

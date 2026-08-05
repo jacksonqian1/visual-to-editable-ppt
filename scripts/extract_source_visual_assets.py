@@ -134,7 +134,7 @@ def apply_exclusions(alpha, crop_box, exclusions):
             alpha[ex_top:ex_bottom, ex_left:ex_right] = 0
 
 
-def rgba_asset(source, crop_box, mode, exclusions=None):
+def rgba_asset(source, crop_box, mode, exclusions=None, edge_risk_ratio=0.04):
     crop = source.crop(crop_box).convert("RGB")
     rgb = np.array(crop)
     if mode == "red-chroma":
@@ -160,12 +160,88 @@ def rgba_asset(source, crop_box, mode, exclusions=None):
         )
     )
     red_ratio = red_pixels / max(1, nonzero)
+    visible = alpha > 12
+    if nonzero:
+        ys, xs = np.where(visible)
+        visible_bounds = [
+            int(xs.min()),
+            int(ys.min()),
+            int(xs.max()) + 1,
+            int(ys.max()) + 1,
+        ]
+        edge_limit = max(1, int(math.ceil(min(alpha.shape) * edge_risk_ratio)))
+        edge_risk = {
+            "left": visible_bounds[0] < edge_limit,
+            "top": visible_bounds[1] < edge_limit,
+            "right": alpha.shape[1] - visible_bounds[2] < edge_limit,
+            "bottom": alpha.shape[0] - visible_bounds[3] < edge_limit,
+        }
+    else:
+        visible_bounds = []
+        edge_limit = 0
+        edge_risk = {"left": False, "top": False, "right": False, "bottom": False}
     return image, {
         "coverage": round(coverage, 4),
         "redRatio": round(red_ratio, 4),
         "foregroundPixels": nonzero,
         "background": [round(float(value), 1) for value in background],
+        "visibleBounds": visible_bounds,
+        "edgeRiskRatio": edge_risk_ratio,
+        "edgeRiskPixels": edge_limit,
+        "edgeRisk": edge_risk,
+        "mayBeClipped": any(edge_risk.values()),
     }
+
+
+def adaptive_icon_asset(
+    source,
+    initial_box,
+    mode,
+    exclusions,
+    edge_risk_ratio,
+    expansion_step,
+    max_expansion,
+):
+    source_width, source_height = source.size
+    current = initial_box
+    expanded = {"left": 0, "top": 0, "right": 0, "bottom": 0}
+    attempts = []
+    while True:
+        asset, metrics = rgba_asset(
+            source,
+            current,
+            mode,
+            exclusions,
+            edge_risk_ratio=edge_risk_ratio,
+        )
+        attempts.append({"sourceRegion": list(current), "metrics": metrics})
+        risk = metrics["edgeRisk"]
+        if not any(risk.values()):
+            return asset, metrics, current, attempts
+
+        left, top, right, bottom = current
+        next_box = [left, top, right, bottom]
+        for index, side in enumerate(("left", "top", "right", "bottom")):
+            if not risk[side] or expanded[side] >= max_expansion:
+                continue
+            amount = min(expansion_step, max_expansion - expanded[side])
+            if side == "left":
+                next_box[index] = max(0, left - amount)
+                amount = left - next_box[index]
+            elif side == "top":
+                next_box[index] = max(0, top - amount)
+                amount = top - next_box[index]
+            elif side == "right":
+                next_box[index] = min(source_width, right + amount)
+                amount = next_box[index] - right
+            else:
+                next_box[index] = min(source_height, bottom + amount)
+                amount = next_box[index] - bottom
+            expanded[side] += amount
+        next_box = tuple(next_box)
+        if next_box == current:
+            return asset, metrics, current, attempts
+        current = next_box
 
 
 def png_data_url(image):
@@ -242,21 +318,41 @@ def main():
     by_id = {element["id"]: element for element in scene.get("elements", [])}
     report = []
     padding = float(scene.get("sourceAssetRecognition", {}).get("iconPadding", 3))
+    edge_risk_ratio = float(scene.get("sourceAssetRecognition", {}).get("iconEdgeRiskRatio", 0.04))
+    expansion_step = int(scene.get("sourceAssetRecognition", {}).get("iconExpansionStep", 4))
+    max_expansion = int(scene.get("sourceAssetRecognition", {}).get("iconMaxExpansion", 20))
+    edge_risk_ratio = min(0.10, max(0.01, edge_risk_ratio))
+    expansion_step = max(1, expansion_step)
+    max_expansion = max(0, max_expansion)
     hide_rejected = bool(scene.get("sourceAssetRecognition", {}).get("hideRejected", False))
 
     for element in scene.get("elements", []):
         if not is_auto_icon_candidate(element):
             continue
-        crop_box = clamp_box(element_box(element), canvas_width, canvas_height, padding)
-        asset, metrics = rgba_asset(source, crop_box, "background-flood")
-        accepted = metrics["foregroundPixels"] >= 8 and metrics["coverage"] <= 0.82
+        initial_crop_box = clamp_box(element_box(element), canvas_width, canvas_height, padding)
+        asset, metrics, crop_box, attempts = adaptive_icon_asset(
+            source,
+            initial_crop_box,
+            "background-flood",
+            None,
+            edge_risk_ratio,
+            expansion_step,
+            max_expansion,
+        )
+        accepted = (
+            metrics["foregroundPixels"] >= 8
+            and metrics["coverage"] <= 0.82
+            and not metrics["mayBeClipped"]
+        )
         item = {
             "id": element["id"],
             "role": "icon",
             "mode": "background-flood",
             "accepted": accepted,
+            "initialSourceRegion": list(initial_crop_box),
             "sourceRegion": list(crop_box),
             "metrics": metrics,
+            "adaptiveAttempts": attempts,
         }
         report.append(item)
         if not accepted:
