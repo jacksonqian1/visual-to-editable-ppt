@@ -213,3 +213,10 @@ unresolved semantic icons must use placeholders instead of generated substitutes
 - Keep names audience-readable for the layer panel.
 - Sort by `z`, then source order.
 - Never reuse an ID.
+
+## Continuous paths and native groups
+
+Use `type: "path"` with local `pathPoints`, `pathWidth`, and `pathHeight` for
+one continuously editable curve. Use `groupId`/`groupName` for native PPT branch
+groups. These are independent of Boolean `mergeGroup` and overlap markers.
+See [continuous-connectors.md](continuous-connectors.md) for the complete schema.

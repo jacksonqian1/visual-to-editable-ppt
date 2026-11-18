@@ -54,3 +54,10 @@
 - Deliver the final PPTX, not scratch files.
 - Mention any placeholders or non-editable raster regions.
 - Report validation limitations when the platform renderer is unavailable.
+
+## Continuous connector QA
+
+Check native `a:cubicBezTo` path count, `p:grpSp` group count, endpoint arrows,
+and unchanged text inventory. Compare member transforms before/after grouping.
+Interior crossings must remain independent. Verify the rendered PPT after
+grouping, not only the HTML or package shape count.

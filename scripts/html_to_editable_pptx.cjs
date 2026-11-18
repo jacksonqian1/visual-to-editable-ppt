@@ -251,6 +251,14 @@ async function main() {
         name: element.dataset.name || element.dataset.id || `object-${index}`,
         kind: element.dataset.ppt,
         shape: element.dataset.shape || null,
+        groupId: element.dataset.groupId || "",
+        layerZ: clean(style.zIndex),
+        groupName: element.dataset.groupName || "",
+        pathPoints: element.dataset.pathPoints ? JSON.parse(element.dataset.pathPoints) : null,
+        pathWidth: clean(element.dataset.pathWidth),
+        pathHeight: clean(element.dataset.pathHeight),
+        pathStrokeWidth: clean(element.dataset.strokeWidth),
+        pathDash: element.dataset.dash || "solid",
         mergeGroup: element.dataset.mergeGroup || "",
         mergeOperation: element.dataset.mergeOperation || "none",
         autoMerge: element.dataset.autoMerge === "true",
@@ -333,12 +341,19 @@ async function main() {
   }
   const X = (value) => value * widthIn / model.width;
   const Y = (value) => value * heightIn / model.height;
+  const nativeGroups = new Map();
+  for (const node of model.nodes.filter(n => n.groupId)) {
+    if (node.kind !== 'shape' || !['line','path'].includes(node.shape) || node.mergeGroup) throw new Error(`Native branch grouping requires separate line/path objects: ${node.id}`);
+    const depth = nativeGroups.get(node.groupId);
+    if (depth !== undefined && depth !== node.layerZ) throw new Error(`Group ${node.groupId} crosses layer depths`);
+    nativeGroups.set(node.groupId, node.layerZ);
+  }
   const booleanPlan = prepareBooleanPlan(model.nodes, mergeMode, mergeTolerance);
   booleanPlan.warnings.forEach((warning) => console.warn(`Boolean geometry: ${warning}`));
   const metadata = (node) => {
     const marker = [node.overlapGroup, node.overlapKind, node.overlapRole].filter(Boolean).join("|");
     return {
-      objectName: marker ? `[${marker}] ${node.name}` : node.name,
+      objectName: node.groupId ? `[ppt-group:${node.groupId}:${node.id}] ${node.name}` : marker ? `[${marker}] ${node.name}` : node.name,
       ...(marker ? { altText: `PPT overlap marker: ${marker}; source object: ${node.name}` } : {})
     };
   };
@@ -433,6 +448,16 @@ async function main() {
     }
     if (node.kind !== "shape") continue;
 
+    if (node.shape === "path") {
+      if (!node.pathPoints || node.pathPoints.length < 2 || node.pathWidth <= 0 || node.pathHeight <= 0) throw new Error(`Invalid path ${node.id}`);
+      const px = value => X(value * node.w / node.pathWidth);
+      const py = value => Y(value * node.h / node.pathHeight);
+      const points = node.pathPoints.map((p, i) => ({x: px(p.x), y: py(p.y), ...(i === 0 ? {moveTo: true} : {}), ...(p.curve ? {curve: {type: 'cubic', x1: px(p.curve.x1), y1: py(p.curve.y1), x2: px(p.curve.x2), y2: py(p.curve.y2)}} : {})}));
+      slide.addShape(pptx.ShapeType.custGeom, {...position, ...metadata(node), points, rotate: node.rotation || 0,
+        fill: {color:'FFFFFF', transparency:100},
+        line: {color: node.color || '111111', width: Math.max(0.5, node.pathStrokeWidth * 0.75), dash: node.pathDash === 'dash' ? 'dash' : 'solid', beginArrowType: node.startArrow === 'none' ? 'none' : 'triangle', endArrowType: node.endArrow === 'none' ? 'none' : 'triangle'}});
+      continue;
+    }
     if (node.shape === "line") {
       const x1 = X(node.x1);
       const y1 = Y(node.y1);
@@ -500,6 +525,12 @@ async function main() {
 
   fs.mkdirSync(path.dirname(output), { recursive: true });
   await pptx.writeFile({ fileName: output });
+  if (model.nodes.some(node => node.groupId)) {
+    const specPath = `${output}.groups.json`;
+    fs.writeFileSync(specPath, JSON.stringify(model.nodes.filter(n => n.groupId).map(n => ({name: metadata(n).objectName, groupId: n.groupId, groupName: n.groupName || n.groupId}))));
+    try { require('node:child_process').execFileSync(process.env.PYTHON || 'python3', [path.join(__dirname, 'group_pptx_objects.py'), output, '--spec', specPath], {stdio:'inherit'}); }
+    finally { fs.unlinkSync(specPath); }
+  }
   console.log(`Boolean geometry: ${booleanPlan.mergedObjects} merged object(s), ${booleanPlan.consumedShapes} source shape(s) consumed`);
   console.log(output);
 }

@@ -144,6 +144,41 @@ Do not use image generation for structural geometry, borders, masks, precise
 connectors, high-confidence library assets, official brand assets, or a
 user-requested `library-only` workflow.
 
+## Continuous Connectors And Editable Groups
+
+Default to **one continuous native path per curved relationship, plus native
+PowerPoint groups for hierarchical branches**. Do not approximate a smooth
+relationship with dozens of separately selectable short line objects. Do not
+rasterize connectors or turn structural curves into decorative SVG images.
+
+- Use `type: "path"` with local `pathPoints` and cubic control points for smooth
+  relationship curves. Export as one editable PowerPoint `custGeom` containing
+  `a:cubicBezTo`, retaining endpoint direction, arrowheads, color and width.
+- Use `line` objects for trunks and branches, then assign an explicit `groupId`
+  and readable `groupName` to the lines belonging to the same logical branch.
+  The exporter creates true `p:grpSp` groups; users can move the group or ungroup
+  it to edit individual lines. This is separate from Boolean `mergeGroup`.
+- Group only reviewed, semantically related objects at the same layer depth.
+  Endpoint contact can suggest a group; interior crossings never establish
+  connectivity. Do not combine unrelated curves just because they cross.
+- For legacy sampled curves, run `scripts/optimize_scene_connectors.py` in
+  report-only mode first. Review chains, fit error, endpoint arrows and proposed
+  branch groups, then use `--apply` to write a separate optimized scene. Reject
+  fits above the configured tolerance; retain original geometry if ambiguous.
+- Keep `scene.json` canonical. The HTML generator, editor and PPT exporter
+  support `path` objects. In the editor, curves can be moved/resized and their
+  endpoints/control points changed through the inspector. Branch grouping is
+  exported to PPT; the browser editor still edits individual branch members.
+- Do not promise automatic attachment to text boxes: paths and groups are
+  independent objects. Use explicitly attached PowerPoint connectors only when
+  requested, and explain the fidelity tradeoff for complex curves.
+- Before delivery, inspect the PPT XML for actual cubic paths and `p:grpSp`,
+  compare text inventories and arrow directions, render the grouped output,
+  and verify group transforms preserve the original member coordinates.
+
+See [references/continuous-connectors.md](references/continuous-connectors.md)
+for the schema, migration command, validation and editing limitations.
+
 ## Prevent Duplicate Borders
 
 Assign every visible boundary to exactly one stroke-owning object. Do not stack

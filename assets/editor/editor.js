@@ -124,7 +124,25 @@ function render() {
 
 function renderElement(element) {
   let node;
-  if (element.type === "line") {
+  if (element.type === "path") {
+    const ns = 'http://www.w3.org/2000/svg';
+    node = document.createElementNS(ns, 'svg');
+    node.classList.add('scene-element');
+    Object.assign(node.style, {left:`${element.x}px`, top:`${element.y}px`, width:`${element.width}px`, height:`${element.height}px`, overflow:'visible', transform:`rotate(${element.rotation || 0}deg)`});
+    node.setAttribute('viewBox', `0 0 ${element.pathWidth || element.width} ${element.pathHeight || element.height}`);
+    node.setAttribute('preserveAspectRatio','none');
+    const d = element.pathPoints.map((p,i) => !i ? `M ${p.x} ${p.y}` : p.curve ? `C ${p.curve.x1} ${p.curve.y1} ${p.curve.x2} ${p.curve.y2} ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(' ');
+    const pathNode = document.createElementNS(ns,'path');
+    pathNode.setAttribute('d', d); pathNode.setAttribute('fill','none'); pathNode.setAttribute('stroke',element.stroke || '#111'); pathNode.setAttribute('stroke-width',element.strokeWidth || 1); pathNode.setAttribute('vector-effect','non-scaling-stroke');
+    if (element.dash === 'dash') pathNode.setAttribute('stroke-dasharray','6 4');
+    const defs = document.createElementNS(ns,'defs'); const marker = document.createElementNS(ns,'marker');
+    const mid = `editor-arrow-${element.id}`;
+    Object.entries({id:mid,markerWidth:'7',markerHeight:'7',refX:'6',refY:'3.5',orient:'auto-start-reverse',markerUnits:'strokeWidth'}).forEach(([k,v])=>marker.setAttribute(k,v));
+    const triangle=document.createElementNS(ns,'path');triangle.setAttribute('d','M0 0 L7 3.5 L0 7 Z');triangle.setAttribute('fill',element.stroke || '#111');marker.appendChild(triangle);defs.appendChild(marker);node.appendChild(defs);
+    if(element.startArrow && element.startArrow !== 'none') pathNode.setAttribute('marker-start',`url(#${mid})`);
+    if(element.endArrow && element.endArrow !== 'none') pathNode.setAttribute('marker-end',`url(#${mid})`);
+    node.appendChild(pathNode);
+  } else if (element.type === "line") {
     node = document.createElement("div");
     const dx = element.x2 - element.x1;
     const dy = element.y2 - element.y1;
@@ -364,6 +382,19 @@ function renderInspector() {
     ]));
   }
 
+  if (element.type === "path") {
+    ui.inspector.appendChild(group("连续曲线", [
+      field("颜色", "stroke", element.stroke || "#111111", "color"),
+      field("粗细", "strokeWidth", element.strokeWidth || 1, "number"),
+      selectField("起点箭头", "startArrow", element.startArrow || "none", [["none", "无"], ["triangle", "箭头"]]),
+      selectField("终点箭头", "endArrow", element.endArrow || "none", [["none", "无"], ["triangle", "箭头"]])
+    ]));
+    element.pathPoints.forEach((point,i) => {
+      const fields = [field("端点 X", `pathPoints.${i}.x`, point.x, "number"),field("端点 Y", `pathPoints.${i}.y`, point.y, "number")];
+      if(point.curve) for(const key of ['x1','y1','x2','y2']) fields.push(field(`控制点 ${key}`, `pathPoints.${i}.curve.${key}`, point.curve[key], 'number'));
+      ui.inspector.appendChild(group(`曲线路径点 ${i+1}`, fields));
+    });
+  }
   if (element.type === "text") {
     ui.inspector.appendChild(group("文字", [
       field("内容", "text", element.text || "", "textarea", true),
@@ -456,7 +487,9 @@ function renderInspector() {
     const applyValue = () => {
       const current = selected();
       const key = input.dataset.key;
-      current[key] = input.type === "checkbox" ? input.checked : input.type === "number" ? number(input.value) : input.value;
+      const keys = key.split('.'); let target = current;
+      for(const part of keys.slice(0,-1)) target = target[part];
+      target[keys[keys.length-1]] = input.type === "checkbox" ? input.checked : input.type === "number" ? number(input.value) : input.value;
       state.project.status = "draft";
       scheduleSave();
     };

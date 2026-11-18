@@ -33,6 +33,8 @@ function common(element) {
     `data-id="${escapeHtml(element.id)}"`,
     `data-name="${escapeHtml(element.name || element.id)}"`
   ];
+  if (element.groupId) attributes.push(`data-group-id="${escapeHtml(element.groupId)}"`);
+  if (element.groupName) attributes.push(`data-group-name="${escapeHtml(element.groupName)}"`);
   if (element.mergeGroup) attributes.push(`data-merge-group="${escapeHtml(element.mergeGroup)}"`);
   if (element.mergeOperation && element.mergeOperation !== "none") {
     attributes.push(`data-merge-operation="${escapeHtml(element.mergeOperation)}"`);
@@ -101,6 +103,13 @@ function renderElement(element, projectRoot, outputRoot) {
     const src = absoluteSource(element.src, projectRoot, outputRoot);
     const style = `${boxStyle(element)};object-fit:${css(element.fit || "contain")}`;
     return `<img ${common(element)} data-rotation="${Number(element.rotation) || 0}" src="${escapeHtml(src)}" style="${style}" alt="">`;
+  }
+  if (element.type === "path") {
+    const pts = element.pathPoints;
+    if (!Array.isArray(pts) || pts.length < 2) throw new Error(`Invalid path: ${element.id}`);
+    const d = pts.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : p.curve ? `C ${p.curve.x1} ${p.curve.y1} ${p.curve.x2} ${p.curve.y2} ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(" ");
+    const marker = `arrow-${element.id}`;
+    return `<svg ${common(element)} data-shape="path" data-rotation="${Number(element.rotation) || 0}" data-path-points="${escapeHtml(JSON.stringify(pts))}" data-path-width="${element.pathWidth || element.width}" data-path-height="${element.pathHeight || element.height}" data-stroke-width="${element.strokeWidth || 1}" data-start-arrow="${escapeHtml(element.startArrow || 'none')}" data-end-arrow="${escapeHtml(element.endArrow || 'none')}" data-dash="${element.dash || 'solid'}" style="${boxStyle(element)};overflow:visible;color:${css(element.stroke || '#111111')}" viewBox="0 0 ${element.pathWidth || element.width} ${element.pathHeight || element.height}" preserveAspectRatio="none"><defs><marker id="${marker}" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0 0 L7 3.5 L0 7 Z" fill="currentColor"/></marker></defs><path d="${d}" fill="none" stroke="currentColor" stroke-width="${element.strokeWidth || 1}" vector-effect="non-scaling-stroke" ${element.dash === 'dash' ? 'stroke-dasharray="6 4"' : ''} ${element.startArrow && element.startArrow !== 'none' ? `marker-start="url(#${marker})"` : ''} ${element.endArrow && element.endArrow !== 'none' ? `marker-end="url(#${marker})"` : ''}/></svg>`;
   }
   if (element.type === "line") {
     const x1 = Number(element.x1) || 0;
